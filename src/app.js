@@ -30,6 +30,7 @@ var HEIGHT = 6;
 var PIC_SIZE = 64;
 
 var PlayScene = cc.Scene.extend({
+    elementLayer: null,
     onEnter: function () {
         this._super();
         var ws = cc.winSize;
@@ -44,24 +45,48 @@ var PlayScene = cc.Scene.extend({
         menu.y = 0;
         this.addChild(menu);
 
-        var labelLayer = new cc.LabelTTF("Refresh", "Arial", 20);
-        var menuItem = new cc.MenuItemLabel(labelLayer, this.onRefreshCallBack, this);
-        menuItem.attr({
+        var label1 = new cc.LabelTTF("Refresh", "Arial", 30);
+        var label2 = new cc.LabelTTF("Tips", "Arial", 30);
+        var menuItem1 = new cc.MenuItemLabel(label1, this.onRefreshCallBack, this);
+        var menuItem2 = new cc.MenuItemLabel(label2, this.onTipsCallBack, this);
+        menuItem1.attr({
             x: ws.width - 50,
-            y: 25
+            y: 60
         });
-        menu.addChild(menuItem);
-
+        menuItem2.attr({
+            x: ws.width - 50,
+            y: 120
+        });
+        menu.addChild(menuItem1);
+        menu.addChild(menuItem2);
         var elementLayer = new ElementLayer();
         elementLayer.attr({
             x: ws.width / 2 - WIDTH / 2 * 80,
             y: 0,
+            tag: 1000
         });
+        // 存起来
+        this.elementLayer = elementLayer;
         this.addChild(elementLayer);
 
     },
     onRefreshCallBack: function () {
-        cc.director.replaceScene(new PlayScene());
+        var ws = cc.winSize;
+        cc.log('----->Refresh');
+        this.removeChildByTag(1000);
+        var elementLayer = new ElementLayer();
+        elementLayer.attr({
+            x: ws.width / 2 - WIDTH / 2 * 80,
+            y: 0,
+            tag: 1000
+        });
+        this.elementLayer = elementLayer;
+        this.addChild(elementLayer);
+    },
+    onTipsCallBack: function(){
+        var e = this.elementLayer;
+        e.getTips();
+        cc.log('----->Tips');
     }
 });
 var TitleLayer = cc.Layer.extend({
@@ -79,7 +104,6 @@ var ElementLayer = cc.Layer.extend({
     onEnter: function () {
         this._super();
         var ws = cc.winSize;
-
         /* =====> DONE(10.15)
          * 这里是第一次初始化页面的砖块，我预设了6种不同的砖块，利用random先随机生成一个地图；
          * 主要问题是，初始地图有可能没办法进行消除，（后面的消除算法可以封装起来，在这里先进行
@@ -93,7 +117,10 @@ var ElementLayer = cc.Layer.extend({
          * 
          * 
          */
-        this.drawMap();
+        do{
+            this.drawMap();
+        }while(!this.checkMap());
+
         //单次点击事件监听
         var listener = cc.EventListener.create({
             event: cc.EventListener.TOUCH_ONE_BY_ONE,
@@ -175,14 +202,17 @@ var ElementLayer = cc.Layer.extend({
            opacity: 160,
            tag: s.tag - WIDTH*count
         })
-   },
+    },
+    /** 
+     * 画地图模块，生成地图、清除地图、生成提示
+     */
     drawMap: function () {
         // 非首次加载
         if (this.getChildByTag(1)) {
             // 先让之前的每个sprite离场，再生成一张新的地图
             for (let i = 1; i <= HEIGHT * WIDTH; ++i) {
                 let s = this.getChildByTag(i);
-                let act = moveTo(0.3, cc.point(s.x, s.y - 80 * HEIGHT));
+                let act = cc.moveTo(0.3, cc.p(s.x, s.y - 80 * HEIGHT));
                 s.runAction(act);
                 this.removeChildByTag(i);
             }
@@ -190,6 +220,31 @@ var ElementLayer = cc.Layer.extend({
         for (let i = 0; i < HEIGHT; ++i) {
             for (let j = 0; j < WIDTH; ++j) {
                 this.createSprite(i, j, 0);
+            }
+        }
+    },
+    removeMap: function(){
+        for (let i = 1; i <= HEIGHT * WIDTH; ++i) {
+            this.removeChildByTag(i);
+        }
+    },
+    getTips: function(){
+        var s;
+        // 放大后缩回来
+        var seq = cc.sequence(cc.scaleBy(0.2,1.5),cc.scaleBy(0.2,1/1.5));
+        for(let i = 0;i < WIDTH*HEIGHT; ++i){
+            s = this.getChildByTag(i+1);
+            if(this.checkX(s)+this.checkY(s)>0){
+                break;
+            }
+        }
+        for(let i = 0;i < WIDTH*HEIGHT; ++i){
+            s = this.getChildByTag(i+1);
+            if(s.isSelected){
+                // 透明度改变，闪一下
+                s.runAction(seq.clone());
+                // 清空一下状态
+                s.isSelected = false;
             }
         }
     },
@@ -230,7 +285,7 @@ var ElementLayer = cc.Layer.extend({
             tag: temp.tag
         });
     },
-    whichSprite: function (point) {
+    whichSprite: function(point) {
         var tag = -1;
         var x = Math.floor(point.x / 80);
         var y = Math.floor(point.y / 80);
@@ -249,13 +304,13 @@ var ElementLayer = cc.Layer.extend({
 
         // 坑点：js或运算左边true则不执行右边的表达式
         if (this.checkX(s1) + this.checkX(s2) + this.checkY(s1) + this.checkY(s2) > 0) {
-            for (let i = 0; i < WIDTH * HEIGHT; ++i) {
-                let s = this.getChildByTag(i + 1);
-                // cc.log(s.isSelected);
-                if (s.isSelected > 0) {
-                    s.opacity = 255;
-                }
-            }
+            // for (let i = 0; i < WIDTH * HEIGHT; ++i) {
+            //     let s = this.getChildByTag(i + 1);
+            //     cc.log(s.isSelected);
+            //     if (s.isSelected > 0) {
+            //         s.opacity = 255;
+            //     }
+            // }
             /**
              * DONE(10.19) 开始执行消除动作
              * 预期是扫描每一列：从下往上，如果当前位置的砖块有砖块，则判断是否标记为true，
@@ -281,10 +336,11 @@ var ElementLayer = cc.Layer.extend({
                     }
                 }
                 for(let k = j;k<HEIGHT+count;++k){
-                    this.removeChildByTag((k-count)*WIDTH+i+1);
+                    if(this.getChildByTag((k-count)*WIDTH+i+1))
+                        this.removeChildByTag((k-count)*WIDTH+i+1);
                     if(k < HEIGHT){
                         let s = this.getChildByTag(k * WIDTH + i + 1);
-                        cc.log('----->s.tag=',s.tag);
+                        // cc.log('----->s.tag=',s.tag);
                         this.moveSprite(s,count);
                     }else{
                         this.createSprite(k,i,count);
@@ -299,6 +355,27 @@ var ElementLayer = cc.Layer.extend({
         }
 
     },
+    /**
+     * =====> 检测地图是否存在解
+     * 遍历每一个点位，使用checkXY
+     */
+    checkMap: function(){
+        var flag = false;
+        for(let i = 0;i < HEIGHT*WIDTH;++i){
+            let s = this.getChildByTag(i+1);
+            if(this.checkX(s)+this.checkY(s)>0){
+                cc.log('----->map is ok');
+                flag = true;
+                break;
+            }
+        }
+        // 消除状态
+        for(let i = 0;i < HEIGHT*WIDTH;++i){
+            this.getChildByTag(i+1).isSelected = false;
+        }
+        return flag;
+    },
+
     /**
      * ====>DONE(10.16)
      * 我采用的方法是分别检测两个被点击位置的x和y方向，
@@ -320,8 +397,6 @@ var ElementLayer = cc.Layer.extend({
         for (let i = s.posY * WIDTH - WIDTH + 1; i <= s.posY * WIDTH; ++i) {
             this.getChildByTag(i).isSelected > 0 ? this.getChildByTag(i).isSelected = 2 : true;
         }
-
-
         for (let i = s.tag; i > s.posY * WIDTH - WIDTH; --i) {
             let _s = this.getChildByTag(i);
             if (_s.num == s.num) {
@@ -340,8 +415,7 @@ var ElementLayer = cc.Layer.extend({
                 break;
             }
         }
-        cc.log("----->count=", count);
-
+        // cc.log("----->count=", count);
         if (count >= 3) {
             for (let i = s.posY * WIDTH - WIDTH + 1; i <= s.posY * WIDTH; ++i) {
                 this.getChildByTag(i).isSelected = this.getChildByTag(i).isSelected > 1 ? 1 : this.getChildByTag(i).isSelected;
