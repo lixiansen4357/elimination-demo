@@ -29,6 +29,44 @@ var HEIGHT = 6;
 //图片像素
 var PIC_SIZE = 64;
 
+var MainScene = cc.Scene.extend({
+    onEnter: function(){
+        this._super();
+        var wx = cc.winSize;
+
+        var backgroundLayer = new cc.LayerColor(cc.color(0,0,0,0));
+        this.addChild(backgroundLayer);
+        var titleLayer = new TitleLayer();
+        this.addChild(titleLayer);
+
+        var menu = new cc.Menu();
+        menu.x = 0;
+        menu.y = 0;
+        this.addChild(menu);
+
+        var label1 = new cc.LabelTTF("Start Game","Arial",50);
+        var label2 = new cc.LabelTTF("Exit","Arial",50);
+        var menuItem1 = new cc.MenuItemLabel(label1, this.onPlayCallback, this);
+        var menuItem2 = new cc.MenuItemLabel(label2, this.onExitCallback, this);
+        menuItem1.attr({
+            x: wx.width/2,
+            y: wx.height/2 + 50
+        });
+        menuItem2.attr({
+            x: wx.width/2,
+            y: wx.height/2 - 50
+        });
+        menu.addChild(menuItem1);
+        menu.addChild(menuItem2);
+    },
+    onPlayCallback: function(){
+        cc.director.replaceScene(new PlayScene());
+    },
+    onExitCallback: function(){
+        cc.log('----->exit');
+    }
+});
+
 var PlayScene = cc.Scene.extend({
     elementLayer: null,
     onEnter: function () {
@@ -47,30 +85,37 @@ var PlayScene = cc.Scene.extend({
 
         var label1 = new cc.LabelTTF("Refresh", "Arial", 30);
         var label2 = new cc.LabelTTF("Tips", "Arial", 30);
-        var menuItem1 = new cc.MenuItemLabel(label1, this.onRefreshCallBack, this);
-        var menuItem2 = new cc.MenuItemLabel(label2, this.onTipsCallBack, this);
+        var label3 = new cc.LabelTTF("Home","Arial",30);
+        var menuItem1 = new cc.MenuItemLabel(label1, this.onRefreshCallback, this);
+        var menuItem2 = new cc.MenuItemLabel(label2, this.onTipsCallback, this);
+        var menuItem3 = new cc.MenuItemLabel(label3, this.onMainCallback, this);
         menuItem1.attr({
-            x: ws.width - 50,
+            x: ws.width - 100,
             y: 60
         });
         menuItem2.attr({
-            x: ws.width - 50,
+            x: ws.width - 100,
             y: 120
+        });
+        menuItem3.attr({
+            x: ws.width - 100,
+            y: 180
         });
         menu.addChild(menuItem1);
         menu.addChild(menuItem2);
+        menu.addChild(menuItem3);
         var elementLayer = new ElementLayer();
         elementLayer.attr({
             x: ws.width / 2 - WIDTH / 2 * 80,
             y: 0,
             tag: 1000
         });
-        // 存起来
+        
         this.elementLayer = elementLayer;
         this.addChild(elementLayer);
 
     },
-    onRefreshCallBack: function () {
+    onRefreshCallback: function () {
         var ws = cc.winSize;
         cc.log('----->Refresh');
         this.removeChildByTag(1000);
@@ -83,10 +128,13 @@ var PlayScene = cc.Scene.extend({
         this.elementLayer = elementLayer;
         this.addChild(elementLayer);
     },
-    onTipsCallBack: function(){
+    onTipsCallback: function(){
         var e = this.elementLayer;
         e.getTips();
         cc.log('----->Tips');
+    },
+    onMainCallback: function(){
+        cc.director.replaceScene(new MainScene());
     }
 });
 var TitleLayer = cc.Layer.extend({
@@ -112,10 +160,8 @@ var ElementLayer = cc.Layer.extend({
          * 是砖块生成之初在空中，执行依次下落的动作。
          *
         ***/
-        /** =====> TODO
-         * 首次生成地图需要检测该图的点是否有可以消除的部分，调用后面的checkXY方法对每个点遍历，
-         * 
-         * 
+        /** 
+         * 首次生成地图需要检测该图的点是否有可以消除的部分，调用后面的checkXY方法对每个点遍历
          */
         do{
             this.drawMap();
@@ -176,7 +222,7 @@ var ElementLayer = cc.Layer.extend({
     createSprite: function (i, j , k) {
         k = k || 0;
         let act = cc.moveTo(0.2 * (j + 1), cc.p(j * 80 + PIC_SIZE / 2, (i - k) * 80 + PIC_SIZE / 2));
-        let num = Math.floor(Math.random() * 10);
+        let num = Math.floor(Math.random() * 7);
         let png = 'res/images/img_' + num + '.png';
         const sprite = new cc.Sprite(png);
         sprite.attr({
@@ -356,8 +402,9 @@ var ElementLayer = cc.Layer.extend({
 
     },
     /**
-     * =====> 检测地图是否存在解
-     * 遍历每一个点位，使用checkXY
+     * =====> 检测地图是否存在解，不完善
+     * 遍历每一个点位，使用checkXY，因为是交换后再消除，所以想预知是否有解
+     * 非常考验算法，因此这里仅仅检测是否有连续的三个以上的块（太菜了）
      */
     checkMap: function(){
         var flag = false;
